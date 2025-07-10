@@ -11,14 +11,20 @@ import {
   Pencil, 
   File, 
   Folder,
-  Calendar
+  Calendar,
+  LucideIcon
 } from 'lucide-react';
-import { ProjectSnapshot, ProjectComparison as ProjectComparisonType } from '@/lib/types';
+import { ProjectSnapshot } from '@/lib/types';
 import { compareProjects, formatDate } from '@/lib/utils';
 
 interface ProjectComparisonProps {
   snapshot1: ProjectSnapshot;
   snapshot2: ProjectSnapshot;
+}
+
+interface FileItem {
+  path: string;
+  type: 'file' | 'directory';
 }
 
 function FileList({ 
@@ -27,9 +33,9 @@ function FileList({
   icon: Icon, 
   colorClass 
 }: { 
-  files: any[]; 
+  files: FileItem[]; 
   title: string; 
-  icon: any; 
+  icon: LucideIcon; 
   colorClass: string; 
 }) {
   if (files.length === 0) return null;

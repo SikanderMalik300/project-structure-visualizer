@@ -108,7 +108,7 @@ export function ProjectHistory({
           <Alert>
             <GitCompare className="h-4 w-4" />
             <AlertDescription>
-              Select another snapshot to compare with "{selectedForComparison.name}"
+              Select another snapshot to compare with &ldquo;{selectedForComparison.name}&rdquo;
               <Button 
                 variant="link" 
                 size="sm" 

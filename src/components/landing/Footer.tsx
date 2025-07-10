@@ -1,12 +1,7 @@
 'use client';
 
 import { 
-  Github, 
-  Twitter, 
-  Mail,
   Heart,
-  Code,
-  Globe,
   FolderTree
 } from 'lucide-react';
 

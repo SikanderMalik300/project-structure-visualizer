@@ -6,7 +6,6 @@ import {
   Zap,
   Shield,
   Download,
-  FileText,
   Users,
   Code,
   Globe,

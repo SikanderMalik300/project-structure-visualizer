@@ -45,19 +45,11 @@ function TreeNode({ node, level, searchTerm }: TreeNodeProps) {
     return null;
   }
 
-  const statusColors = {
-    new: 'bg-green-100 text-green-800 border-green-200',
-    updated: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    existing: 'bg-gray-100 text-gray-600 border-gray-200'
-  };
-
   const statusIcons = {
     new: Plus,
     updated: Pencil,
     existing: Check
   };
-
-  const StatusIcon = node.status ? statusIcons[node.status] : Check;
 
   return (
     <div className={`${!shouldShow ? 'opacity-50' : ''}`}>

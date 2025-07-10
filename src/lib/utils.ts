@@ -162,7 +162,7 @@ export function formatDate(date: Date | string): string {
   return d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
 }
 
-export function generateTreeText(structure: FileNode[], prefix = '', isLast = true): string {
+export function generateTreeText(structure: FileNode[], prefix = ''): string {
   let result = '';
   
   structure.forEach((node, index) => {
@@ -173,7 +173,7 @@ export function generateTreeText(structure: FileNode[], prefix = '', isLast = tr
     
     if (node.children && node.children.length > 0) {
       const newPrefix = prefix + (isLastItem ? '    ' : '│   ');
-      result += generateTreeText(node.children, newPrefix, isLastItem);
+      result += generateTreeText(node.children, newPrefix);
     }
   });
   

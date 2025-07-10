@@ -3,7 +3,6 @@
 import { Button } from '@/components/ui/button';
 import { 
   Upload, 
-  Github,
   Sparkles,
   CheckCircle,
   ArrowRight
@@ -14,7 +13,7 @@ interface HeroProps {
   onViewDemo: () => void;
 }
 
-export function Hero({ onGetStarted, onViewDemo }: HeroProps) {
+export function Hero({ onGetStarted }: HeroProps) {
   return (
     <section className="relative bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 py-12 sm:py-16 lg:py-20 overflow-hidden">
       {/* Animated background elements */}

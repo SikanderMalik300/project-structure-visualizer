@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { 
   Upload, 
   Zap,
-  Download,
-  ArrowRight
+  Download
 } from 'lucide-react';
 
 interface HowItWorksProps {

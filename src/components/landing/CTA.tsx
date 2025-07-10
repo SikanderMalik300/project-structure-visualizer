@@ -15,7 +15,7 @@ interface CTAProps {
   onViewDemo: () => void;
 }
 
-export function CTA({ onGetStarted, onViewDemo }: CTAProps) {
+export function CTA({ onGetStarted }: CTAProps) {
   const stats = [
     { icon: Users, value: "10K+", label: "Developers" },
     { icon: Zap, value: "1M+", label: "Files Processed" },

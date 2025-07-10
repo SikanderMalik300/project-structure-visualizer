@@ -2,17 +2,17 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { User, Session, SupabaseClient } from '@supabase/supabase-js';
+import { User, Session, SupabaseClient, AuthError } from '@supabase/supabase-js';
 
 interface SupabaseContextType {
   supabase: SupabaseClient;
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string) => Promise<{ error: any }>;
-  signOut: () => Promise<{ error: any }>;
-  resetPassword: (email: string) => Promise<{ error: any }>;
+  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signOut: () => Promise<{ error: AuthError | null }>;
+  resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
 }
 
 const SupabaseContext = createContext<SupabaseContextType | undefined>(undefined);
@@ -101,7 +101,7 @@ export function SupabaseProvider({ children }: SupabaseProviderProps) {
       return { error };
     } catch (error) {
       console.error('Unexpected sign in error:', error);
-      return { error };
+      return { error: error as AuthError };
     } finally {
       setLoading(false);
     }
@@ -125,7 +125,7 @@ export function SupabaseProvider({ children }: SupabaseProviderProps) {
       return { error };
     } catch (error) {
       console.error('Unexpected sign up error:', error);
-      return { error };
+      return { error: error as AuthError };
     } finally {
       setLoading(false);
     }
@@ -147,7 +147,7 @@ export function SupabaseProvider({ children }: SupabaseProviderProps) {
       return { error };
     } catch (error) {
       console.error('Unexpected sign out error:', error);
-      return { error };
+      return { error: error as AuthError };
     } finally {
       setLoading(false);
     }
@@ -166,7 +166,7 @@ export function SupabaseProvider({ children }: SupabaseProviderProps) {
       return { error };
     } catch (error) {
       console.error('Unexpected reset password error:', error);
-      return { error };
+      return { error: error as AuthError };
     }
   };
 
