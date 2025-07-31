@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
-import { FileUpload } from '@/components/project/FileUpload';
 import { ProjectTree } from '@/components/project/ProjectTree';
 import { ProjectHistory } from '@/components/project/ProjectHistory';
 import { ProjectComparison } from '@/components/project/ProjectComparison';
@@ -23,16 +22,215 @@ import {
   GitCompare,
   AlertCircle,
   CheckCircle,
-  Download
+  Download,
+  FileText,
+  FolderOpen
 } from 'lucide-react';
 import { FileNode, ProjectSnapshot } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
 import { applyComparisonToStructure, compareProjects, downloadProjectStructure } from '@/lib/utils';
 
+// Enhanced FileUpload component with proper ZIP handling
+function EnhancedFileUpload({ onStructureParsed }: { onStructureParsed: (structure: FileNode[], zipFile: File, fileContents: Record<string, string>) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.zip')) {
+      setError('Please upload a ZIP file');
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      // Import JSZip dynamically
+      const JSZip = (await import('jszip')).default;
+      const zip = await JSZip.loadAsync(file);
+      
+      // Parse structure and extract contents simultaneously
+      const { structure, fileContents } = await parseZipWithContents(zip);
+      
+      if (structure.length === 0) {
+        setError('No files found in the ZIP archive');
+        return;
+      }
+
+      // Call the callback with both structure and file contents
+      onStructureParsed(structure, file, fileContents);
+      
+    } catch (error) {
+      console.error('Error processing ZIP file:', error);
+      setError('Failed to process ZIP file. Please ensure it\'s a valid ZIP archive.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Enhanced ZIP parsing with content extraction
+  const parseZipWithContents = async (zip: any): Promise<{ structure: FileNode[], fileContents: Record<string, string> }> => {
+    const structure: FileNode[] = [];
+    const fileContents: Record<string, string> = {};
+    const pathMap = new Map<string, FileNode>();
+
+    // Get all files and sort them
+    const sortedFiles = Object.keys(zip.files).sort();
+    
+    for (const path of sortedFiles) {
+      const zipEntry = zip.files[path];
+      const segments = path.split('/').filter(Boolean);
+      
+      if (segments.length === 0) continue;
+
+      let currentLevel = structure;
+      let currentPath = '';
+
+      // Build the tree structure
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        currentPath += (currentPath ? '/' : '') + segment;
+        
+        let node = currentLevel.find(n => n.name === segment);
+        
+        if (!node) {
+          const isDirectory = i < segments.length - 1 || zipEntry.dir;
+          
+          node = {
+            name: segment,
+            type: isDirectory ? 'directory' : 'file',
+            path: currentPath,
+            children: isDirectory ? [] : undefined,
+            lastModified: zipEntry.date || new Date()
+          };
+          
+          // Extract file content for text files
+          if (!isDirectory && zipEntry.async) {
+            try {
+              // Check if file is likely text-based
+              if (isTextFile(segment)) {
+                const content = await zipEntry.async('string');
+                if (content.length < 5000000 && !content.includes('\0')) { // < 5MB and no null bytes
+                  fileContents[currentPath] = content;
+                  console.log(`Extracted content for: ${currentPath} (${content.length} chars)`);
+                }
+              }
+            } catch (error) {
+              console.warn(`Could not extract content for ${currentPath}:`, error);
+            }
+          }
+          
+          currentLevel.push(node);
+          pathMap.set(currentPath, node);
+        }
+        
+        if (node.type === 'directory' && node.children) {
+          currentLevel = node.children;
+        }
+      }
+    }
+
+    console.log(`Parsed structure: ${structure.length} root items`);
+    console.log(`Extracted content for ${Object.keys(fileContents).length} files`);
+    
+    return { structure, fileContents };
+  };
+
+  // Enhanced text file detection
+  const isTextFile = (filename: string): boolean => {
+    const name = filename.toLowerCase();
+    
+    // Code files
+    if (/\.(js|jsx|ts|tsx|mjs|cjs|vue|svelte)$/i.test(name)) return true;
+    
+    // Config files
+    if (/\.(json|yaml|yml|toml|ini|conf|config)$/i.test(name)) return true;
+    
+    // Web files
+    if (/\.(html|htm|css|scss|sass|less|xml|svg)$/i.test(name)) return true;
+    
+    // Documentation
+    if (/\.(md|txt|rst|asciidoc|adoc)$/i.test(name)) return true;
+    
+    // Data files
+    if (/\.(csv|tsv|log|sql)$/i.test(name)) return true;
+    
+    // Script files
+    if (/\.(sh|bash|zsh|fish|ps1|bat|cmd|py|rb|php|go|rs|java|cpp|c|h|swift|kt|scala)$/i.test(name)) return true;
+    
+    // Special files (no extension)
+    if (/^(readme|license|changelog|contributing|todo|dockerfile|makefile|gitignore|dockerignore|eslintrc|prettierrc|babelrc)$/i.test(name)) return true;
+    
+    // Package/config files
+    if (/(package\.json|package-lock\.json|yarn\.lock|composer\.json|requirements\.txt|pipfile|gemfile|cargo\.toml|go\.mod|pom\.xml|build\.gradle|tsconfig\.json|jsconfig\.json)$/i.test(name)) return true;
+    
+    // Environment files
+    if (/\.env/i.test(name)) return true;
+    
+    return false;
+  };
+
+  return (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Upload className="w-5 h-5" />
+          Upload Project ZIP
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+            <div className="space-y-4">
+              <FolderOpen className="w-12 h-12 text-gray-400 mx-auto" />
+              <div>
+                <h3 className="text-lg font-medium">Upload your project</h3>
+                <p className="text-gray-600">Select a ZIP file containing your project structure</p>
+              </div>
+              <div>
+                <input
+                  type="file"
+                  accept=".zip"
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                  className="hidden"
+                  id="zip-upload"
+                />
+                <label
+                  htmlFor="zip-upload"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
+                >
+                  {uploading ? 'Processing...' : 'Choose ZIP File'}
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          <div className="text-sm text-gray-600">
+            <p><strong>Supported files:</strong> JavaScript, TypeScript, JSON, Markdown, CSS, HTML, Python, and more</p>
+            <p><strong>File size limit:</strong> Up to 5MB per file</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function DashboardContent() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [currentStructure, setCurrentStructure] = useState<FileNode[]>([]);
+  const [fileContents, setFileContents] = useState<Record<string, string>>({});
   const [currentSnapshot, setCurrentSnapshot] = useState<ProjectSnapshot | undefined>(undefined);
   const [comparisonSnapshots, setComparisonSnapshots] = useState<{
     snapshot1: ProjectSnapshot;
@@ -63,7 +261,6 @@ function DashboardContent() {
     );
   }
 
-  // Show loading while redirecting
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -75,8 +272,13 @@ function DashboardContent() {
     );
   }
 
-  const handleStructureParsed = (structure: FileNode[]) => {
+  // Enhanced structure parsing handler
+  const handleStructureParsed = (structure: FileNode[], zipFile: File, contents: Record<string, string>) => {
+    console.log('Structure parsed:', structure.length, 'items');
+    console.log('File contents extracted:', Object.keys(contents).length, 'files');
+    
     setCurrentStructure(structure);
+    setFileContents(contents);
     setCurrentSnapshot(undefined);
     setActiveTab('upload');
   };
@@ -84,6 +286,7 @@ function DashboardContent() {
   const handleSnapshotSelect = (snapshot: ProjectSnapshot) => {
     setCurrentSnapshot(snapshot);
     setCurrentStructure(snapshot.structure);
+    setFileContents({}); // Clear file contents as they're not stored in snapshots
     setActiveTab('upload');
   };
 
@@ -148,6 +351,12 @@ function DashboardContent() {
     }
   };
 
+  const clearProject = () => {
+    setCurrentStructure([]);
+    setFileContents({});
+    setCurrentSnapshot(undefined);
+  };
+
   const getProjectStats = () => {
     const totalFiles = currentStructure.reduce((count, node) => {
       const countFiles = (n: FileNode): number => {
@@ -167,7 +376,10 @@ function DashboardContent() {
       return count + countFolders(node);
     }, 0);
 
-    return { totalFiles, totalFolders };
+    const filesWithContent = Object.keys(fileContents).length;
+    const totalContentSize = Object.values(fileContents).reduce((sum, content) => sum + content.length, 0);
+
+    return { totalFiles, totalFolders, filesWithContent, totalContentSize };
   };
 
   const stats = getProjectStats();
@@ -183,7 +395,7 @@ function DashboardContent() {
             Welcome back, {user.email?.split('@')[0]}!
           </h1>
           <p className="text-gray-600">
-            Upload, visualize, and track your project structures over time.
+            Upload, visualize, and analyze your project structures with complete file content extraction.
           </p>
         </div>
 
@@ -238,7 +450,7 @@ function DashboardContent() {
             {activeTab === 'upload' && (
               <div className="space-y-6">
                 {currentStructure.length === 0 ? (
-                  <FileUpload onStructureParsed={handleStructureParsed} />
+                  <EnhancedFileUpload onStructureParsed={handleStructureParsed} />
                 ) : (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -246,6 +458,12 @@ function DashboardContent() {
                         <h2 className="text-xl font-semibold">Current Project</h2>
                         {currentSnapshot && (
                           <Badge variant="outline">{currentSnapshot.name}</Badge>
+                        )}
+                        {stats.filesWithContent > 0 && (
+                          <Badge variant="secondary" className="bg-green-100 text-green-800">
+                            <FileText className="w-3 h-3 mr-1" />
+                            {stats.filesWithContent} files with content
+                          </Badge>
                         )}
                       </div>
                       <div className="flex gap-2">
@@ -265,14 +483,14 @@ function DashboardContent() {
                           size="sm"
                         >
                           <Download className="w-4 h-4 mr-2" />
-                          Download
+                          Download Structure
                         </Button>
                         <Button onClick={() => setSaveDialogOpen(true)} size="sm">
                           <Save className="w-4 h-4 mr-2" />
                           Save Project
                         </Button>
                         <Button 
-                          onClick={() => setCurrentStructure([])} 
+                          onClick={clearProject} 
                           variant="outline" 
                           size="sm"
                         >
@@ -280,7 +498,11 @@ function DashboardContent() {
                         </Button>
                       </div>
                     </div>
-                    <ProjectTree structure={currentStructure} />
+                    <ProjectTree 
+                      structure={currentStructure} 
+                      fileContents={fileContents}
+                      projectName={currentSnapshot?.name || 'Project'}
+                    />
                   </div>
                 )}
               </div>
@@ -302,7 +524,7 @@ function DashboardContent() {
             )}
           </div>
 
-          {/* Sidebar */}
+          {/* Enhanced Sidebar */}
           <div className="space-y-6">
             {/* Quick Actions */}
             <Card>
@@ -315,7 +537,7 @@ function DashboardContent() {
                   variant="outline" 
                   size="sm"
                   onClick={() => {
-                    setCurrentStructure([]);
+                    clearProject();
                     setActiveTab('upload');
                   }}
                 >
@@ -345,7 +567,7 @@ function DashboardContent() {
               </CardContent>
             </Card>
 
-            {/* Project Stats */}
+            {/* Enhanced Project Stats */}
             {currentStructure.length > 0 && (
               <Card>
                 <CardHeader>
@@ -360,6 +582,16 @@ function DashboardContent() {
                     <div className="flex justify-between">
                       <span>Folders:</span>
                       <span className="font-medium">{stats.totalFolders}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Files with Content:</span>
+                      <span className="font-medium text-green-600">{stats.filesWithContent}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Content Size:</span>
+                      <span className="font-medium text-blue-600">
+                        {(stats.totalContentSize / 1024).toFixed(1)} KB
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Total Items:</span>
@@ -388,10 +620,10 @@ function DashboardContent() {
               <CardContent>
                 <div className="space-y-2 text-sm text-gray-600">
                   <p>1. Upload a ZIP file of your project</p>
-                  <p>2. View and analyze the structure</p>
-                  <p>3. Save snapshots for comparison</p>
-                  <p>4. Track changes over time</p>
-                  <p>5. Download formatted structure</p>
+                  <p>2. View structure and file contents</p>
+                  <p>3. Download complete project report</p>
+                  <p>4. Save snapshots for comparison</p>
+                  <p>5. Track changes over time</p>
                 </div>
               </CardContent>
             </Card>
